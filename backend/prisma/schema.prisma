@@ -1,0 +1,131 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  name      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  teams     TeamMember[]
+  ownedTeams Team[] @relation("owner")
+
+  @@map("users")
+}
+
+model Team {
+  id        String     @id @default(cuid())
+  name      String
+  ownerId   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  owner     User       @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+  repos     ConnectedRepo[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String     @id @default(cuid())
+  teamId    String
+  userId    String
+  role      String     @default("viewer") // "admin" or "viewer"
+  joinedAt  DateTime   @default(now())
+
+  // Relations
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model ConnectedRepo {
+  id              String     @id @default(cuid())
+  teamId          String
+  githubRepoId    String
+  githubRepoName  String
+  owner           String     // GitHub owner username
+  accessToken     String     @db.Text // Encrypted
+  syncedAt        DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  team            Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues          GitHubIssue[]
+  pullRequests    GitHubPullRequest[]
+
+  @@map("connected_repos")
+}
+
+model GitHubIssue {
+  id              String     @id @default(cuid())
+  repoId          String
+  githubIssueId   Int
+  title           String
+  state           String     // "open" or "closed"
+  labels          String[]
+  storyPoints     Int?
+  createdAt       DateTime   @default(now())
+  closedAt        DateTime?
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  repo            ConnectedRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, githubIssueId])
+  @@index([repoId])
+  @@index([state])
+  @@map("github_issues")
+}
+
+model GitHubPullRequest {
+  id              String     @id @default(cuid())
+  repoId          String
+  githubPrId      Int
+  title           String
+  state           String     // "open", "closed", "merged"
+  reviewCount     Int        @default(0)
+  reviewTimeMinutes Int?
+  createdAt       DateTime   @default(now())
+  mergedAt        DateTime?
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  repo            ConnectedRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, githubPrId])
+  @@index([repoId])
+  @@index([state])
+  @@map("github_pull_requests")
+}
+
+model SprintData {
+  id              String     @id @default(cuid())
+  teamId          String
+  sprintNumber    Int
+  sprintStartDate DateTime
+  sprintEndDate   DateTime
+  velocity        Int        // Total story points completed
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([teamId])
+  @@map("sprint_data")
+}
